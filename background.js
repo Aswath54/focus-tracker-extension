@@ -296,14 +296,25 @@ async function handleMessages(request) {
       if (typeof request.parentPassword !== "string" || request.parentPassword.length < 4) {
         return { success: false, error: "Parent password must be at least 4 characters." };
       }
-      await chrome.storage.local.set({ parentPassword: request.parentPassword });
+      const parentEmail = typeof request.parentEmail === "string" ? request.parentEmail.trim().toLowerCase() : "";
+      if (!parentEmail) {
+        return { success: false, error: "Log in with the parent account before saving a parent password." };
+      }
+      await chrome.storage.local.set({ parentPassword: request.parentPassword, parentEmail });
       return { success: true };
     }
 
     else if (request.type === "VERIFY_PARENT_PASSWORD") {
-      const storage = await chrome.storage.local.get("parentPassword");
+      const storage = await chrome.storage.local.get(["parentPassword", "parentEmail"]);
+      const currentUser = await chrome.storage.local.get(["accountUser"]);
+      const currentEmail = typeof currentUser.accountUser?.email === "string"
+        ? currentUser.accountUser.email.trim().toLowerCase()
+        : "";
       if (!storage.parentPassword || storage.parentPassword !== request.parentPassword) {
         return { success: false, error: "Incorrect parent password." };
+      }
+      if (!storage.parentEmail || storage.parentEmail !== currentEmail) {
+        return { success: false, error: "Log in with the parent account to unlock sync." };
       }
       return { success: true };
     }
