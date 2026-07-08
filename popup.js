@@ -704,6 +704,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     addToWhitelistHistory(domain); // Bring to the top of history
   }
 
+  function getHistoryGroup(domain) {
+    const normalized = typeof domain === "string" ? domain.toLowerCase() : "";
+    const groups = [
+      { name: "Education", match: ["khanacademy", "coursera", "edx", "duolingo", "quizlet", "wikipedia", "britannica", "jstor", "arxiv", "scholar.google", "nih", "nasa", "mit.edu", "stanford.edu", "harvard.edu", "berkeley.edu", "gale", "loc.gov", "instructure", "classroom.google", "clever", "classlink", "kiddle", "scholastic", "discoveryeducation", "seesaw", "ck12", "typing", "overdrive", "soraapp"] },
+      { name: "Development", match: ["github", "stackoverflow", "developer.mozilla", "w3schools", "docs.microsoft", "google.com"] },
+      { name: "Productivity", match: ["notion", "figma", "slack", "trello", "asana", "monday", "microsoft365", "office", "dropbox", "drive.google", "docs.google", "sheets.google", "calendar.google"] },
+      { name: "Social", match: ["youtube", "instagram", "facebook", "x.com", "twitter", "tiktok", "reddit", "discord", "snapchat", "whatsapp", "linkedin", "pinterest"] },
+      { name: "Entertainment", match: ["netflix", "hulu", "primevideo", "spotify", "twitch", "disney", "hbo", "crunchyroll"] }
+    ];
+
+    for (const group of groups) {
+      if (group.match.some((token) => normalized.includes(token))) {
+        return group.name;
+      }
+    }
+
+    return "Other";
+  }
+
   async function renderHistory(filterText = "") {
     if (!historyList) return;
     historyList.innerHTML = "";
@@ -731,25 +750,43 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    filteredHistory.forEach(item => {
-      const li = document.createElement("li");
-      li.className = "site-item";
+    const grouped = filteredHistory.reduce((acc, item) => {
+      const groupName = getHistoryGroup(item.domain);
+      if (!acc[groupName]) acc[groupName] = [];
+      acc[groupName].push(item);
+      return acc;
+    }, {});
 
-      const span = document.createElement("span");
-      span.className = "site-domain";
-      span.textContent = item.domain;
-      span.title = item.domain;
+    const groupOrder = ["Education", "Development", "Productivity", "Social", "Entertainment", "Other"];
+    groupOrder.forEach((groupName) => {
+      const items = grouped[groupName];
+      if (!items || !items.length) return;
 
-      const addBtn = document.createElement("button");
-      addBtn.className = "btn-add-history";
-      addBtn.textContent = "Add";
-      addBtn.addEventListener("click", () => {
-        addSiteDirectly(item.domain);
+      const header = document.createElement("li");
+      header.className = "history-group-header";
+      header.textContent = groupName;
+      historyList.appendChild(header);
+
+      items.forEach(item => {
+        const li = document.createElement("li");
+        li.className = "site-item";
+
+        const span = document.createElement("span");
+        span.className = "site-domain";
+        span.textContent = item.domain;
+        span.title = item.domain;
+
+        const addBtn = document.createElement("button");
+        addBtn.className = "btn-add-history";
+        addBtn.textContent = "Add";
+        addBtn.addEventListener("click", () => {
+          addSiteDirectly(item.domain);
+        });
+
+        li.appendChild(span);
+        li.appendChild(addBtn);
+        historyList.appendChild(li);
       });
-
-      li.appendChild(span);
-      li.appendChild(addBtn);
-      historyList.appendChild(li);
     });
   }
 
