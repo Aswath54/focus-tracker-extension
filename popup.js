@@ -46,6 +46,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const secActiveSession = document.getElementById("sec-active-session");
   const secIdleSession = document.getElementById("sec-idle-session");
   const secWhitelist = document.getElementById("sec-whitelist");
+  const secPermanentFeedback = document.getElementById("sec-permanent-feedback");
+  const parentTimerPanel = document.getElementById("parent-timer-panel");
+  const parentLinkNote = document.getElementById("parent-link-note");
   
   // Password Setup Elements
   const passwordSetupForm = document.getElementById("password-setup-form");
@@ -152,6 +155,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const isChildMode = focusMode === "child";
       const isParentMode = focusMode === "parent";
       const showParentOnlyPanels = isParentMode;
+      const hasSignedInAccount = !!(accountToken && accountUser);
       
       // Render Whitelist
       renderWhitelist(currentAllowedUrls);
@@ -159,17 +163,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         focusModeSelect.value = focusMode;
         focusModeSelect.disabled = modeLocked;
       }
-      secWhitelist.style.display = showParentOnlyPanels ? "none" : isChildMode ? "none" : "block";
-      secChangePassword.style.display = showParentOnlyPanels ? "none" : state.hasPassword && !isChildMode ? "block" : "none";
+      if (secPermanentFeedback) {
+        secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && state.hasPassword ? "block" : "none";
+      }
+      secWhitelist.style.display = showParentOnlyPanels || isChildMode ? "none" : "block";
+      secChangePassword.style.display = showParentOnlyPanels || isChildMode ? "none" : state.hasPassword ? "block" : "none";
       if (parentControlPanel) {
-        parentControlPanel.style.display = isParentMode ? "block" : "none";
+        parentControlPanel.style.display = isParentMode && hasSignedInAccount ? "block" : "none";
       }
       if (childSyncPanel) {
-        childSyncPanel.style.display = isParentMode ? "none" : state.focusMode === "child" && !childSyncUnlocked ? "block" : "none";
+        childSyncPanel.style.display = isParentMode || !hasSignedInAccount || modeLocked
+          ? "none"
+          : state.focusMode === "child" && !childSyncUnlocked ? "block" : "none";
       }
       if (parentTimerPanel) {
-        parentTimerPanel.style.display = "none";
+        parentTimerPanel.style.display = isParentMode && hasSignedInAccount ? "block" : "none";
       }
+      updateParentTimerControls();
 
       // 1. Password Check
       if (!state.hasPassword) {
@@ -180,6 +190,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         showSection(secSetupPassword);
         secWhitelist.style.display = "none"; // Hide whitelist during setup
         secChangePassword.style.display = "none";
+        if (secPermanentFeedback) secPermanentFeedback.style.display = "none";
+        if (parentTimerPanel) parentTimerPanel.style.display = "none";
         updateStatus(false, "Setup");
         return;
       }
@@ -187,17 +199,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       // 2. Active Session Check
       const now = Date.now();
       if (isParentMode) {
-        showSection(null);
-        if (secSetupPassword) secSetupPassword.style.display = "none";
-        if (secActiveSession) secActiveSession.style.display = "none";
-        if (secIdleSession) secIdleSession.style.display = "none";
-        if (secFeedback) secFeedback.style.display = "none";
-        if (secWhitelist) secWhitelist.style.display = "none";
-        if (secChangePassword) secChangePassword.style.display = "none";
-        if (parentControlPanel) parentControlPanel.style.display = "block";
-        if (childSyncPanel) childSyncPanel.style.display = "none";
-        if (parentTimerPanel) parentTimerPanel.style.display = "none";
-        updateStatus(false, "Parent");
+        chrome.storage.local.get("showFeedbackPrompt", (feedbackState) => {
+          if (feedbackState.showFeedbackPrompt) {
+            showSection(secFeedback);
+            if (secWhitelist) secWhitelist.style.display = "none";
+            if (secChangePassword) secChangePassword.style.display = "none";
+            if (parentControlPanel) parentControlPanel.style.display = "none";
+            if (parentTimerPanel) parentTimerPanel.style.display = "none";
+            updateStatus(false, "Feedback");
+          } else {
+            showSection(null);
+            if (secSetupPassword) secSetupPassword.style.display = "none";
+            if (secActiveSession) secActiveSession.style.display = "none";
+            if (secIdleSession) secIdleSession.style.display = "none";
+            if (secFeedback) secFeedback.style.display = "none";
+            if (secWhitelist) secWhitelist.style.display = "none";
+            if (secChangePassword) secChangePassword.style.display = "none";
+            if (parentControlPanel) parentControlPanel.style.display = hasSignedInAccount ? "block" : "none";
+            if (childSyncPanel) childSyncPanel.style.display = "none";
+            if (parentTimerPanel) parentTimerPanel.style.display = hasSignedInAccount ? "block" : "none";
+            updateParentTimerControls();
+            updateStatus(false, "Parent");
+          }
+        });
         return;
       }
 
@@ -217,7 +241,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         // Idle
         chrome.storage.local.get("showFeedbackPrompt", (res) => {
-          if (res.showFeedbackPrompt) {
+          if (res.showFeedbackPrompt && !isChildMode) {
             showSection(secFeedback);
             updateStatus(false, "Feedback");
             secWhitelist.style.display = "none"; // Hide whitelist during feedback
@@ -225,8 +249,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           } else {
             showSection(secIdleSession);
             updateStatus(false, "Idle");
-            secWhitelist.style.display = showParentOnlyPanels ? "none" : isChildMode ? "none" : "block"; // Restore whitelist
-            secChangePassword.style.display = showParentOnlyPanels ? "none" : isChildMode ? "none" : "block";
+            secWhitelist.style.display = showParentOnlyPanels || isChildMode ? "none" : "block"; // Restore whitelist
+            secChangePassword.style.display = showParentOnlyPanels || isChildMode ? "none" : "block";
           }
         });
         stopLocalCountdown();
@@ -255,6 +279,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     focusModeHelp.textContent = helpByMode[focusModeSelect.value] || helpByMode.self;
   }
 
+  function updateParentTimerControls() {
+    const canStartParentSession = focusMode === "parent" && !!(accountToken && accountUser) && !!childLinked;
+    if (parentLinkNote) {
+      parentLinkNote.style.display = canStartParentSession ? "none" : "block";
+    }
+    if (btnParentStartFocus) {
+      btnParentStartFocus.disabled = !canStartParentSession;
+      btnParentStartFocus.title = canStartParentSession
+        ? "Start the child focus session"
+        : "Complete child sync before starting a session";
+    }
+  }
+
   if (focusModeSelect) {
     focusModeSelect.value = focusMode;
     updateFocusModeHelp();
@@ -275,11 +312,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         parentControlPanel.style.display = focusMode === "parent" ? "block" : "none";
       }
       if (childSyncPanel) {
-        childSyncPanel.style.display = focusMode === "child" && !childSyncUnlocked ? "block" : "none";
+        childSyncPanel.style.display = focusMode === "child" && !childSyncUnlocked && !modeLocked ? "block" : "none";
       }
       if (parentTimerPanel) {
-        parentTimerPanel.style.display = focusMode === "parent" ? "block" : "none";
+        parentTimerPanel.style.display = focusMode === "parent" && !!(accountToken && accountUser) ? "block" : "none";
       }
+      updateParentTimerControls();
     });
   }
 
@@ -301,10 +339,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       chrome.runtime.sendMessage({
         type: "VERIFY_PARENT_PASSWORD",
         parentPassword: enteredPassword
-      }, (response) => {
+      }, async (response) => {
         if (response && response.success) {
           childSyncUnlocked = true;
-          modeLocked = false;
+          childLinked = true;
+          modeLocked = true;
           if (childSyncPassword) childSyncPassword.value = "";
           childSyncError.style.display = "none";
           if (childSyncSuccess) {
@@ -313,11 +352,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
           if (childSyncPanel) childSyncPanel.style.display = "none";
           if (focusModeSelect) {
-            focusModeSelect.disabled = false;
+            focusModeSelect.disabled = true;
           }
-          chrome.storage.local.set({ modeLocked: false });
+          await chrome.storage.local.set({ modeLocked: true, childLinked: true });
           updateFocusModeHelp();
           renderAccount();
+          await syncProgress();
+          refreshState();
         } else {
           showError(childSyncError, response.error || "Incorrect parent password.");
         }
@@ -995,12 +1036,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       try {
         fetch(`${BACKEND_URL}/api/feedback`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: getFeedbackHeaders(),
           body: JSON.stringify({
             ...feedback,
-            feedbackKey: feedbackUserId
+            feedbackKey: getFeedbackKey()
           })
         }).catch(err => console.error("Failed to submit feedback to server:", err));
       } catch (e) {
@@ -1055,6 +1094,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const newId = `fb_${crypto.randomUUID()}`;
     await chrome.storage.local.set({ feedbackUserId: newId });
     return newId;
+  }
+
+  function getFeedbackKey() {
+    const email = typeof accountUser?.email === "string" ? accountUser.email.trim().toLowerCase() : "";
+    return email ? `account:${email}` : feedbackUserId;
+  }
+
+  function getFeedbackHeaders() {
+    return {
+      "Content-Type": "application/json",
+      ...(accountToken ? { Authorization: `Bearer ${accountToken}` } : {})
+    };
   }
 
   async function loadAccount() {
@@ -1386,14 +1437,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       try {
         await fetch(`${BACKEND_URL}/api/feedback`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: getFeedbackHeaders(),
           body: JSON.stringify({
             rating: permanentFeedback.rating,
             thumb: permanentFeedback.thumb,
             comments: permanentFeedback.comments || "",
-            feedbackKey: feedbackUserId
+            feedbackKey: getFeedbackKey()
           })
         });
         if (permFeedbackSuccess) {
