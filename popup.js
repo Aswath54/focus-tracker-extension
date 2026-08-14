@@ -105,6 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const starBtns = document.querySelectorAll(".star-btn");
   const feedbackComments = document.getElementById("feedback-comments");
   const btnSubmitFeedback = document.getElementById("btn-submit-feedback");
+  const btnLaterFeedback = document.getElementById("btn-later-feedback");
   const feedbackSuccessMsg = document.getElementById("feedback-success-msg");
   const permThumbUp = document.getElementById("perm-btn-thumb-up");
   const permThumbDown = document.getElementById("perm-btn-thumb-down");
@@ -174,7 +175,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateFocusModeHelp();
       }
       if (secPermanentFeedback) {
-        secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && state.hasPassword ? "block" : "none";
+        const sessionFeedbackPending = !!state.showFeedbackPrompt;
+        secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && state.hasPassword && !state.isFocusActive && !sessionFeedbackPending ? "block" : "none";
       }
       secWhitelist.style.display = showParentOnlyPanels || isChildMode ? "none" : "block";
       secChangePassword.style.display = showParentOnlyPanels || isChildMode ? "none" : state.hasPassword ? "block" : "none";
@@ -1102,6 +1104,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.close();
         refreshState();
       }, 1500);
+    });
+  }
+
+  if (btnLaterFeedback) {
+    btnLaterFeedback.addEventListener("click", async () => {
+      await chrome.storage.local.set({
+        showFeedbackPrompt: false,
+        feedbackPromptDeferred: true
+      });
+      window.close();
     });
   }
 
