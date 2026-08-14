@@ -127,6 +127,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   let accountToken = null;
   let accountUser = null;
   let focusMode = "self";
+  function accountSlot(mode) {
+    return mode === "self" ? { token: "selfAccountToken", user: "selfAccountUser" } : { token: "accountToken", user: "accountUser" };
+  }
+
+  async function switchAccountContext(nextMode) {
+    const current = accountSlot(focusMode);
+    const next = accountSlot(nextMode);
+    await chrome.storage.local.set({ [current.token]: accountToken || "", [current.user]: accountUser || null });
+    const saved = await chrome.storage.local.get([next.token, next.user]);
+    accountToken = saved[next.token] || null;
+    accountUser = saved[next.user] || null;
+    await chrome.storage.local.set({ accountToken: accountToken || "", accountUser: accountUser || null });
+  }
   let parentPassword = "";
   let hasParentPassword = false;
   let childSyncUnlocked = false;
@@ -346,14 +359,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (focusModeSelect) {
     focusModeSelect.value = focusMode;
     updateFocusModeHelp();
-    focusModeSelect.addEventListener("change", () => {
+    focusModeSelect.addEventListener("change", async () => {
       if (modeLocked) {
         focusModeSelect.value = focusMode;
         updateFocusModeHelp();
         return;
       }
 
-      focusMode = focusModeSelect.value;
+      const nextMode = focusModeSelect.value;
+      await switchAccountContext(nextMode);
+      focusMode = nextMode;
       updateFocusModeHelp();
       chrome.runtime.sendMessage({
         type: "SET_FOCUS_MODE",
@@ -1201,15 +1216,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function loadAccount() {
-    const result = await chrome.storage.local.get(["accountToken", "accountUser"]);
-    accountToken = result.accountToken || null;
-    accountUser = result.accountUser || null;
+    const state = await chrome.storage.local.get("focusMode");
+    const slot = accountSlot(state.focusMode || "self");
+    const result = await chrome.storage.local.get([slot.token, slot.user]);
+    accountToken = result[slot.token] || null;
+    accountUser = result[slot.user] || null;
+    await chrome.storage.local.set({ accountToken: accountToken || "", accountUser: accountUser || null });
     renderAccount();
 
     if (!accountToken) return;
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/profile`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/profile?mode=${focusMode === "self" ? "self" : "account"}`, {
         headers: { Authorization: `Bearer ${accountToken}` }
       });
       if (!response.ok) {
@@ -1227,7 +1245,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const data = await response.json();
       accountUser = data.user;
-      await chrome.storage.local.set({ accountUser });
+      const slot = accountSlot(focusMode);
+      await chrome.storage.local.set({ accountUser, [slot.user]: accountUser });
       await restoreProgress(data.progress);
       renderAccount();
     } catch (e) {
@@ -1299,7 +1318,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function finishGoogleAccountLogin(data) {
     accountToken = data.token;
     accountUser = data.user;
-    await chrome.storage.local.set({ accountToken, accountUser });
+    const slot = accountSlot(focusMode);
+    await chrome.storage.local.set({ accountToken, accountUser, [slot.token]: accountToken, [slot.user]: accountUser });
     await restoreProgress(data.progress);
     renderAccount();
     await refreshState();
@@ -1355,7 +1375,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await accountRequest("/api/auth/google-login", {
         code,
         codeVerifier,
-        redirectUri
+        redirectUri,
+        mode: focusMode === "self" ? "self" : "account"
       });
       await finishGoogleAccountLogin(data);
     } catch (e) {
@@ -1405,7 +1426,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accountToken}`
         },
-        body: JSON.stringify({ progress })
+        body: JSON.stringify({ progress, mode: focusMode === "self" ? "self" : "account" })
       });
       if (!response.ok) {
         if (response.status === 401) {
@@ -1429,13 +1450,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function clearAccount() {
+    const slot = accountSlot(focusMode);
     accountToken = null;
     accountUser = null;
     modeLocked = false;
     if (focusModeSelect) {
       focusModeSelect.disabled = false;
     }
-    await chrome.storage.local.remove(["accountToken", "accountUser", "modeLocked"]);
+    await chrome.storage.local.remove(["accountToken", "accountUser", slot.token, slot.user, "modeLocked"]);
     renderAccount();
   }
 
