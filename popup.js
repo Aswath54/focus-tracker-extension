@@ -68,6 +68,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const parentCustomMinutesInput = document.getElementById("parent-custom-minutes");
   const btnParentSetCustom = document.getElementById("btn-parent-set-custom");
   const btnParentStartFocus = document.getElementById("btn-parent-start-focus");
+  const parentStopPassword = document.getElementById("parent-stop-password");
+  const btnParentStopFocus = document.getElementById("btn-parent-stop-focus");
+  const parentStopError = document.getElementById("parent-stop-error");
   
   // Unlock Elements
   const unlockPasswordInput = document.getElementById("unlock-password-input");
@@ -595,6 +598,26 @@ document.addEventListener("DOMContentLoaded", async () => {
           refreshState();
         } else {
           alert(response.error || "Could not start child session.");
+        }
+      });
+    });
+  }
+
+  if (btnParentStopFocus) {
+    btnParentStopFocus.addEventListener("click", () => {
+      if (focusMode !== "parent") return;
+      const password = parentStopPassword ? parentStopPassword.value : "";
+      if (!password) {
+        showError(parentStopError, "Sync password required.");
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "STOP_SESSION", password }, (response) => {
+        if (response && response.success) {
+          if (parentStopPassword) parentStopPassword.value = "";
+          if (parentStopError) parentStopError.style.display = "none";
+          refreshState();
+        } else {
+          showError(parentStopError, response?.error || "Could not stop child session.");
         }
       });
     });
