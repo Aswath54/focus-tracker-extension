@@ -171,6 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (focusModeSelect) {
         focusModeSelect.value = focusMode;
         focusModeSelect.disabled = modeLocked;
+        updateFocusModeHelp();
       }
       if (secPermanentFeedback) {
         secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && state.hasPassword ? "block" : "none";
