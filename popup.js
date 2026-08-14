@@ -401,13 +401,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         parentPassword: parentPass,
         focusMode,
         parentEmail: accountUser && accountUser.email ? accountUser.email : ""
-      }, (response) => {
+      }, async (response) => {
         if (response && response.success) {
           parentPassword = parentPass;
-          syncProgress();
+          const synced = await syncProgress();
           if (parentPasswordInput) parentPasswordInput.value = "";
           if (parentPasswordConfirm) parentPasswordConfirm.value = "";
           parentPasswordError.style.display = "none";
+          if (!synced) {
+            showError(parentPasswordError, "Parent password saved locally, but could not sync to the account. Check your connection and try again.");
+            return;
+          }
           if (parentPasswordSuccess) {
             parentPasswordSuccess.style.display = "block";
             setTimeout(() => parentPasswordSuccess.style.display = "none", 2500);
@@ -1219,10 +1223,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function syncProgress() {
-    if (!accountToken) return;
+    if (!accountToken) return false;
     try {
       const progress = await buildProgressPayload();
-      await fetch(`${BACKEND_URL}/api/progress`, {
+      const response = await fetch(`${BACKEND_URL}/api/progress`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1230,8 +1234,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         },
         body: JSON.stringify({ progress })
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `Account sync failed with status ${response.status}.`);
+      }
+      return true;
     } catch (e) {
       console.error("Progress sync failed:", e);
+      return false;
     }
   }
 
