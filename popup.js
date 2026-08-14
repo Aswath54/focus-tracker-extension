@@ -1070,6 +1070,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         headers: { Authorization: `Bearer ${accountToken}` }
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          accountToken = null;
+          accountUser = null;
+          await chrome.storage.local.remove(["accountToken", "accountUser"]);
+          renderAccount();
+          showError(accountError, "Your Google session expired. Sign in again to sync progress.");
+          return;
+        }
         console.warn("Account profile refresh failed; keeping stored login until logout.");
         return;
       }
@@ -1240,6 +1248,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         body: JSON.stringify({ progress })
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          accountToken = null;
+          accountUser = null;
+          await chrome.storage.local.remove(["accountToken", "accountUser"]);
+          renderAccount();
+          throw new Error("Your Google session expired. Sign in again.");
+        }
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || `Account sync failed with status ${response.status}.`);
       }
