@@ -183,10 +183,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       if (secPermanentFeedback) {
         const sessionFeedbackPending = !!state.showFeedbackPrompt;
-        secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && state.hasPassword && !state.isFocusActive && !sessionFeedbackPending ? "block" : "none";
+        secPermanentFeedback.style.display = !isChildMode && hasSignedInAccount && !state.isFocusActive && !sessionFeedbackPending ? "block" : "none";
       }
       secWhitelist.style.display = showParentOnlyPanels || isChildMode ? "none" : "block";
-      secChangePassword.style.display = showParentOnlyPanels || isChildMode ? "none" : state.hasPassword ? "block" : "none";
+      secChangePassword.style.display = "none";
       if (parentControlPanel) {
         parentControlPanel.style.display = isParentMode && hasSignedInAccount ? "block" : "none";
       }
@@ -289,7 +289,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             showSection(secIdleSession);
             updateStatus(false, "Idle");
             secWhitelist.style.display = showParentOnlyPanels || isChildMode ? "none" : "block"; // Restore whitelist
-            secChangePassword.style.display = showParentOnlyPanels || isChildMode ? "none" : "block";
+            secChangePassword.style.display = "none";
           }
         });
         stopLocalCountdown();
