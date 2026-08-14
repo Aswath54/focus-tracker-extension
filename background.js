@@ -77,6 +77,7 @@ async function getExtensionState() {
     "allowedUrls",
     "password",
     "parentPassword",
+    "childLinked",
     "focusMode",
     "modeLocked",
     "accountToken",
@@ -89,6 +90,7 @@ async function getExtensionState() {
     allowedUrls: result.allowedUrls || [],
     hasPassword: !!result.password,
     hasParentPassword: !!result.parentPassword,
+    childLinked: !!result.childLinked,
     focusMode: result.focusMode || "self",
     modeLocked: !!result.modeLocked,
     hasAccount: !!(result.accountToken || result.accountUser)
@@ -316,6 +318,7 @@ async function handleMessages(request) {
       if (!storage.parentEmail || storage.parentEmail !== currentEmail) {
         return { success: false, error: "Log in with the parent account to unlock sync." };
       }
+      await chrome.storage.local.set({ childLinked: true });
       return { success: true };
     }
     
@@ -331,6 +334,9 @@ async function handleMessages(request) {
     else if (request.type === "START_SESSION") {
       if (!state.hasPassword) {
         return { success: false, error: "Please configure a lock password first." };
+      }
+      if (state.focusMode === "parent" && !state.childLinked) {
+        return { success: false, error: "Link a child first before starting a parent session." };
       }
       if (state.isFocusActive && Date.now() < state.sessionEndTime) {
         return { success: false, error: "Focus session is already running." };
@@ -420,6 +426,8 @@ async function handleMessages(request) {
         feedbackHistory: Array.isArray(progress.feedbackHistory) ? progress.feedbackHistory : [],
         password: typeof progress.lockPassword === "string" ? progress.lockPassword : "",
         parentPassword: typeof progress.parentPassword === "string" ? progress.parentPassword : "",
+        parentEmail: typeof progress.parentEmail === "string" ? progress.parentEmail.trim().toLowerCase() : "",
+        childLinked: !!progress.childLinked,
         modeLocked: !!progress.modeLocked,
         accountToken: typeof progress.accountToken === "string"
           ? progress.accountToken
